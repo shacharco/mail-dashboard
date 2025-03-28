@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Gmail Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>    
+    <h2>Email Dashboard</h2>
+
+    <!-- Date range inputs -->
+    <div class="input-container">
+        <label for="startDate">Start Date:</label>
+        <input type="date" id="startDate" required>
+        <br>
+        <label for="endDate">End Date:</label>
+        <input type="date" id="endDate" required>
+        <br>
+        <label for="crop">Max Values:</label>
+        <input type="number" id="crop">
+        <br>
+        <button class="feedback" id="requestFeature">Request a Feature</button>
+        <br>
+    </div>
+
+    <!-- Metric selection -->
+    <div class="input-container">
+        <label for="gmail-metrics">Select Gmail Metrics:</label>
+        <select id="gmail-metrics" multiple>
+            <option value="From">Emails per Sender</option>
+            <option value="Subject">Emails per Subject</option>
+            <!-- Add more metrics as needed -->
+        </select>
+        <label for="calendar-metrics">Select Calendar Metrics:</label>
+        <select id="calendar-metrics" multiple>
+            <option value="organizer.email">Events per Sender</option>
+            <option value="colorId">Event per Color</option>
+            <!-- Add more metrics as needed -->
+        </select>
+
+        
+    </div>
+
+    <!-- Start button -->
+    <button class="main" id="startButton">Start</button>
+
+    <!-- Loading indicator -->
+    <p id="loadingText" class="loading" style="display:none;">Loading emails, please wait...</p>
+
+    <div id="chartsContainer"></div>
+
+    <script src="libs/chart.min.js"></script>
+    <script src="auth.js"></script>
+    <script src="gmail.js"></script>
+    <script src="calendar.js"></script>
+    <script src="chart.js"></script>
+    <script src="popup.js"></script>
+</body>
+</html>
