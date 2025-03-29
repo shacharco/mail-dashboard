@@ -24,10 +24,10 @@ document.getElementById("startButton").addEventListener("click", async function 
     loadingText.style.display = "block"; // Show loading message
     try {
         if (gmailMetrics.length != 0){
-            fetchEmails(drawCharts, startDate, endDate, gmailMetrics, cropNum);
+            fetchEmails(startDate, endDate, gmailMetrics, cropNum);
         }
         if (calendarMetrics.length != 0){
-            fetchCalendarEvents(drawCharts, startDate, endDate, calendarMetrics, cropNum);
+            fetchCalendarEvents(startDate, endDate, calendarMetrics, cropNum);
         }
     } catch (error) {
         console.error("Error fetching emails:", error);

@@ -1,17 +1,12 @@
-function fetchEmails(callback, startDate, endDate, metrics, cropNum) {
-    let querySize = 100;
+function fetchEmails(startDate, endDate, metrics, cropNum) {
+    const querySize = 100;
     let emailIds = [];
-    let batchSize = 10;
-    let metadatas = []
-    let i = 0;
+    const batchSize = 10;
+    let metadatas = [];      
     const start = new Date(startDate);
     const end = new Date(endDate);
-    const totalDays = (end-start) / (1000 * 3600 * 24);
-    // Convert startDate and endDate to Gmail's date format (yyyy/mm/dd)
-    let formattedStartDate = formatDateForGmailQuery(startDate);
-    let formattedEndDate = formatDateForGmailQuery(endDate);
-    
-    let query = `after:${formattedStartDate} before:${formattedEndDate}`;
+    let loadingText = document.getElementById("loadingText");
+
     chrome.storage.local.get("gmailAccessToken", async function (storage) {
         if (!storage.gmailAccessToken) {
             console.error("No access token found.");
@@ -20,27 +15,21 @@ function fetchEmails(callback, startDate, endDate, metrics, cropNum) {
         try {
             let nextPageToken = null;
             do {
-                let data = await fetchEmailsIds(querySize, nextPageToken, storage.gmailAccessToken, query)
+                let data = await fetchEmailsIds(querySize, start, end, nextPageToken, storage.gmailAccessToken)
                 nextPageToken = data.nextPageToken;
                 emailIds.push(...data.messages);
-            } while (nextPageToken);
-            do{
-                const batch = emailIds.slice(i, i + batchSize);
-                metadatas.push(...await fetchEmailsBatch(batch, storage.gmailAccessToken));
-                if (metadatas.length == batchSize || metadatas.length % (batchSize*10) == 0){
-                    callback(metadatas, "mails ", metrics, startDate, endDate, cropNum);
-                    let lastMailDateStr = metadatas[metadatas.length-1].payload.headers.find(header => header.name === "Date").value;
-                    let lastMailDate = new Date(lastMailDateStr);
-                    let days = (end-lastMailDate) / (1000 * 3600 * 24); // 1000 ms * 3600 seconds * 24 hours
-                    loadingText.innerText = `Loading emails ${Math.floor(100*days/totalDays)}%, please wait...`;
-    
+                const startMetadatas = metadatas.length;
+                for (let i = startMetadatas; i < emailIds.length; i+=batchSize) {
+                    const idsBatch = emailIds.slice(i, i + batchSize);
+                    metadatas.push(...await fetchEmailsMetadataBatch(idsBatch, storage.gmailAccessToken));
+                    if (metadatas.length == batchSize || metadatas.length % (batchSize*10) == 0){
+                        drawCharts(metadatas, "mails ", metrics, startDate, endDate, cropNum);
+                        showMailLoadingPercentage(loadingText, metadatas, start, end);
+                    }
+                    await new Promise(resolve => setTimeout(resolve, 500)); 
                 }
-                // Avoid hitting per-second rate limits
-                await new Promise(resolve => setTimeout(resolve, 500));
-                i+=batchSize;
-    
-            } while (i < emailIds.length);
-            callback(metadatas, "mails ", metrics, startDate, endDate, cropNum);
+            } while (nextPageToken);
+            drawCharts(metadatas, "mails ", metrics, startDate, endDate, cropNum);
             loadingText.innerText = `Done loading ${emailIds.length} emails. Showing `; 
         } catch (error) {
             loadingText.innerText = `Oops, looks like there is an error loading`; 
@@ -50,12 +39,26 @@ function fetchEmails(callback, startDate, endDate, metrics, cropNum) {
     });
 }
 
+function formatDateForGmailQuery(date) {
+    // Convert date to format "yyyy/mm/dd"
+    let d = new Date(date);
+    return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
+}
 
+function showMailLoadingPercentage(loadingText, metadatas, start, end){
+    const totalDays = (end-start) / (1000 * 3600 * 24);
+    let lastMailDateStr = metadatas[metadatas.length-1]['date'];
+    let lastMailDate = new Date(lastMailDateStr);
+    let days = (end-lastMailDate) / (1000 * 3600 * 24); // 1000 ms * 3600 seconds * 24 hours
+    loadingText.innerText = `Loading emails ${Math.floor(100*days/totalDays)}%, please wait...`;
 
-async function fetchEmailsIds(size, nextPageToken, gmailAccessToken, query){
+}
+
+async function fetchEmailsIds(size, start, end, nextPageToken, gmailAccessToken){
+    let query = `after:${formatDateForGmailQuery(start)} before:${formatDateForGmailQuery(end)}`;
     const url = new URL("https://gmail.googleapis.com/gmail/v1/users/me/messages");
     url.searchParams.set("maxResults", `${size}`);
-    if (query) url.searchParams.set("q", query); // Add query parameter for date range
+    url.searchParams.set("q", query);
     if (nextPageToken) url.searchParams.set("pageToken", nextPageToken);
 
     let response = await fetch(url, {
@@ -65,18 +68,26 @@ async function fetchEmailsIds(size, nextPageToken, gmailAccessToken, query){
     return data;
 }
 
-async function fetchEmailsBatch(batch, gmailAccessToken){
-    let messagePromises = batch.map(msg =>{
-        return fetch(`https://www.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata`, {
+async function fetchEmailsMetadataBatch(batch, gmailAccessToken){
+    let messages = await Promise.all(batch.map(async msg => {
+        let res = await fetch(`https://www.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata`, {
             headers: { Authorization: `Bearer ${gmailAccessToken}` }
-        }).then(res => {
-            if (!res.ok) {
-                console.error(`Error fetching message ${msg.id}:`, res.status, res.statusText);
-                return res.text().then(text => { throw new Error(text); });
-            }
-            return res.json();
-        })
-    });
-    let messages = await Promise.all(messagePromises);;
+        });
+        if (!res.ok) {
+            console.error(`Error fetching message ${msg.id}:`, res.status, res.statusText);
+            throw new Error(await res.text());
+        }
+        let jsonMsg = await res.json();
+        return {
+            'from': jsonMsg.payload.headers.find(header => header.name === "From").value,
+            'subject': jsonMsg.payload.headers.find(header => header.name === "Subject").value,
+            'date': jsonMsg.payload.headers.find(header => header.name === "Date").value
+        };
+        
+    }));
     return messages;
 }   
+function formatDateForGmailQuery(date) {
+    // Convert date to format "yyyy/mm/dd"
+    return `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()}`;
+}

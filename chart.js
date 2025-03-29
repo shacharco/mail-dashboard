@@ -1,61 +1,23 @@
 
 let metricsChartInstance = {}; // Store chart instance globally
-function formatMetadata(metadatas, metric){
-    console.log(metadatas);
+function countData(data, metric){
     let values = {};
-    if (metadatas[0].payload != undefined){
-        metadatas.forEach(msg => {
-            let value = msg.payload.headers.find(header => header.name === metric).value;
-            values[value] = (values[value] || 0) + 1;
-        });
-    }
-    else{
-        metadatas.forEach(msg => {
-            metricKeys = metric.split(".");
-            let value = msg;
-            metricKeys.forEach(k => value = value[k])
-            values[value] = (values[value] || 0) + 1;
-        });
-        if (metric == "colorId"){
-            values = Object.fromEntries(
-                Object.entries(values).map(([key, value]) => [getEventColorName(key), value])
-            );
-        }
-    }
-
+    data.forEach(event => {
+        let value = event[metric];
+        values[value] = (values[value] || 0) + 1;
+    });
     return values;
-}
-function getEventColorName(colorId) {
-    const colorMap = {
-        1: "Lavender",
-        2: "Sage",
-        3: "Grape",
-        4: "Flamingo",
-        5: "Banana",
-        6: "Tangerine",
-        7: "Peacock",
-        8: "Graphite",
-        9: "Blueberry",
-        10: "Basil",
-        11: "Tomato"
-    };
-    return colorMap[colorId] || "Default"; // Default for unspecified colors
 }
 
 function drawCharts(emailData, prefix, metrics, start, end, cropNum) {
     
     metrics.forEach(metric => {
-        console.log(metric)
         let chartContainer = document.createElement("div");
         let canvas = document.createElement("canvas");
         chartContainer.appendChild(canvas);
         document.getElementById("chartsContainer").appendChild(chartContainer);
-        console.log(emailData)
-        let metricData = formatMetadata(emailData, metric);
-        console.log(metricData)
+        let metricData = countData(emailData, metric);
         drawChart(canvas, metricData, prefix+metric, start, end, cropNum);
-        
-        // Add more chart types based on selected metrics
     });
 }
 function drawChart(canvas, emailData, metric, start, end, cropNum) {
@@ -95,9 +57,4 @@ function drawChart(canvas, emailData, metric, start, end, cropNum) {
             scales: { y: { beginAtZero: true } }
         }
     });
-}
-function formatDateForGmailQuery(date) {
-    // Convert date to format "yyyy/mm/dd"
-    let d = new Date(date);
-    return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
 }
